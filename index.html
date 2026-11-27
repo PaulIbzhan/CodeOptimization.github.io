@@ -1,0 +1,213 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Faster R: Code Optimization</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--ink:#172033;--mute:#5b667a;--blue:#2563c9;--good:#14804a;--bad:#c2362f;--code:#101a2e}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:18px/1.5 system-ui,Segoe UI,Roboto,sans-serif;overflow:hidden}
+#bar{position:fixed;top:0;left:0;height:6px;background:var(--blue);transition:width .3s}
+section{display:none;position:fixed;inset:6px 0 64px;overflow:auto;padding:24px 16px}
+section.on{display:flex;animation:in .35s}
+@keyframes in{from{opacity:0;transform:translateY(10px)}}
+.wrap{margin:auto;width:100%;max-width:940px}
+section .grid pre{font-size:14px}h1{font-size:clamp(34px,6vw,60px);line-height:1.1}h2{font-size:clamp(26px,4vw,38px);margin-bottom:8px}
+p.sub{color:var(--mute);margin-bottom:18px}
+.card{background:var(--card);border:1px solid #dde4ef;border-radius:14px;padding:18px;margin:10px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+pre{margin-bottom:8px;background:var(--code);color:#e6edf9;padding:14px;border-radius:10px;overflow:auto;font:15px/1.5 ui-monospace,Consolas,monospace}
+button{font:inherit;border:2px solid var(--blue);background:#fff;color:var(--blue);border-radius:10px;padding:8px 16px;cursor:pointer;margin:4px 4px 4px 0}
+button.fill,button.sel{background:var(--blue);color:#fff}
+button:disabled{cursor:default;opacity:.85}
+button.opt{display:block;width:100%;text-align:left;color:var(--ink);border-color:#cbd5e6}
+button.right{background:#dcf3e6;border-color:var(--good)}button.wrong{background:#fbe3e1;border-color:var(--bad)}
+.track{background:#e7ecf5;border-radius:8px;height:26px;margin:4px 0 12px;overflow:hidden}.fillbar{height:100%;width:0;background:var(--blue);transition:width .8s}
+.big{font-size:30px;font-weight:700}.g{color:var(--good)}.r{color:var(--bad)}.small{font-size:14px;color:var(--mute)}
+input[type=range]{width:100%}
+.cells{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0}.cells span{width:38px;padding:6px 0;text-align:center;background:#e7ecf5;border-radius:6px;font-size:15px}
+.cells span.hit{background:var(--good);color:#fff}.cells span.seen{background:#f6c453}.cells span.out{opacity:.25}
+nav{position:fixed;bottom:0;left:0;right:0;height:64px;display:flex;align-items:center;justify-content:center;gap:14px;background:#fff;border-top:1px solid #dde4ef}
+body{background:radial-gradient(circle at 90% 0,#dbe7ff,transparent 45%),radial-gradient(circle at 0 100%,#d5f5ea,transparent 45%),#f6f8fd}
+h2{color:#1b2a6b}h2:after{content:"";display:block;width:70px;height:6px;border-radius:3px;margin-top:4px;background:linear-gradient(90deg,#2563c9,#12b886,#f59f00)}
+.card{box-shadow:0 8px 22px #1b2a6b14}#bar{background:linear-gradient(90deg,#2563c9,#12b886,#f59f00)}
+section:first-of-type{background:linear-gradient(135deg,#111c4e,#23439b 60%,#0f766e);color:#fff}
+section:first-of-type span,section:first-of-type p{color:#dbe6ff!important}
+.note{border-left:6px solid #f59f00;background:#fff7e6;border-radius:8px;padding:10px 14px;margin-top:10px;font-size:16px}
+.c0{border-top:6px solid #2563c9}.c1{border-top:6px solid #12b886}.c2{border-top:6px solid #f59f00}
+#o .track{height:12px;margin:0 0 3px}#o{padding:6px 14px;margin:4px 0;font-size:15px;line-height:1.3}#race .track{height:16px;margin:2px 0 5px}
+section{padding-top:12px;padding-bottom:8px}
+.ex{background:#eefaf5;border:1px solid #b7e4d3;border-radius:10px;padding:6px 12px;margin:6px 0;font-size:15px}.ex summary{cursor:pointer;font-weight:700;color:#0f6b52}.ex td{padding:3px 12px 3px 0;vertical-align:top}.ex code{font-size:13px}
+</style><style>
+#hud{position:fixed;top:12px;right:12px;z-index:9;display:flex;gap:6px;align-items:center}
+#xp{background:#1b2a6b;color:#fff;border-radius:20px;padding:4px 14px;font-weight:700}#hud button{margin:0;padding:2px 10px;background:#fff}
+#bot{position:fixed;left:12px;bottom:74px;z-index:8;display:flex;flex-direction:column-reverse;align-items:start;pointer-events:none}#bot i{font-size:42px;font-style:normal;animation:bob 1.6s infinite ease-in-out}
+#say{background:#fff;color:#172033;border:2px solid #2563c9;border-radius:14px 14px 14px 2px;padding:5px 11px;font-size:14px;max-width:140px}
+@keyframes bob{50%{transform:translateY(-8px)}}@keyframes pop{50%{transform:scale(1.12)}}@keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+button{transition:transform .15s}button:hover:not(:disabled){transform:translateY(-2px)}.right{animation:pop .4s}.wrong{animation:shake .35s}
+.c0,.c1,.c2{transition:transform .2s}.c0:hover,.c1:hover,.c2:hover{transform:translateY(-6px) rotate(-1deg)}
+.confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:20;pointer-events:none}
+@media(max-width:1240px){#say{display:none}}@media(max-width:900px){#bot{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style></head><body><div id="bar"></div>
+<section><div class="wrap"><h1>Faster R<br><span style="color:var(--blue)">Code Optimization &amp; Algorithmic Efficiency</span></h1>
+<p class="sub" style="margin-top:16px">Write R code that does less work and finishes sooner.</p>
+<p class="small">Presented by: <span contenteditable="true">click to type your name</span></p><p class="small">Use ← → keys or the buttons below.</p></div></section>
+<section><div class="wrap"><h2>Two ideas to remember</h2><p class="sub">Click each card.</p><div class="grid">
+<div class="card"><b>Code optimization</b><br><button onclick="show(this)">Reveal</button><p hidden>Making the same method run faster or use less memory. Example: using <code>rowSums()</code> instead of <code>apply()</code>.</p></div>
+<div class="card"><b>Algorithmic efficiency</b><br><button onclick="show(this)">Reveal</button><p hidden>Choosing a better method, so the work grows slowly as data grows. Example: binary search instead of checking every item.</p></div></div>
+<div class="card"><b>Golden rule:</b> first make it correct, then measure, then speed up only the slow part.</div></div></section>
+<section><div class="wrap"><h2>Where speed matters: the clinical pipeline</h2><p class="sub">Click each stage.</p><div class="grid">
+<div class="card c0"><b>1. SDTM</b><br>Standardised collected data<br><button onclick="show(this)">Typical work</button><p hidden>Mapping raw values to controlled terminology, ISO 8601 dates, sequence numbers. Examples: DM, AE, VS, LB.</p></div>
+<div class="card c1"><b>2. ADaM</b><br>Analysis-ready data<br><button onclick="show(this)">Typical work</button><p hidden>Merging with ADSL, study day, baseline, change from baseline, flags. Examples: ADSL, ADAE, ADVS.</p></div>
+<div class="card c2"><b>3. TLFs</b><br>Tables, listings, figures<br><button onclick="show(this)">Typical work</button><p hidden>Counts, percentages and summary statistics by treatment arm.</p></div></div>
+<div class="note">💡 Each stage feeds the next, so one slow step delays every rerun after a data update.</div></div></section>
+<section><div class="wrap"><h2>Big-O: how work grows</h2><p class="sub">Drag the slider to change the number of records n.</p>
+<input type="range" id="n" min="1" max="6" step="1" value="1" aria-label="input size"><p>n = <b id="nv"></b></p><div id="o" class="card"></div>
+<p class="small">Approximate step counts. Bar length uses a log scale.</p><div class="note">💡 <b>In clinical terms:</b> LB and VS domains are often among the largest. Code that is fine on 100 test rows can stall on a full study.</div></div></section>
+<section><div class="wrap"><h2>Step 1: Measure, don't guess</h2><p class="sub">Click a tool to see how to use it.</p>
+<button class="tab sel" onclick="tab(this,0)">system.time</button><button class="tab" onclick="tab(this,1)">bench</button><button class="tab" onclick="tab(this,2)">profvis</button>
+<pre id="tool"></pre><p id="toolt"></p><div class="note">💡 Time your program on realistic data volumes, and check that the output is unchanged after every speed-up (for example with <code>all.equal()</code>).</div></div></section>
+<section><div class="wrap"><h2>SDTM: keep only what you need</h2><p class="sub">Raw demographics often has extra columns.</p>
+<button class="tab sel" onclick="flip(this,0)">Before</button><button class="tab" onclick="flip(this,1)">Better</button>
+<pre>dm &lt;- raw_dm</pre><pre hidden>dm &lt;- raw_dm[, c(&quot;SUBJID&quot;, &quot;SEX&quot;, &quot;AGE&quot;)]</pre><details class="ex"><summary>📖 Explain this code</summary><table><tr><td><code>raw_dm</code></td><td>The collected data.</td></tr><tr><td><code>c(&quot;SUBJID&quot;, &quot;SEX&quot;, &quot;AGE&quot;)</code></td><td>Names of the columns to keep.</td></tr></table></details>
+<div class="note">💡 Smaller data means less to carry through later steps. Keep every variable your specification needs.</div></div></section>
+<section><div class="wrap"><h2>SDTM: clean text once</h2><p class="sub">Tidy the value one time, then reuse it.</p>
+<button class="tab sel" onclick="flip(this,0)">Before</button><button class="tab" onclick="flip(this,1)">Better</button>
+<pre>ae$AESEV &lt;- toupper(trimws(ae$RAWSEV))
+severe &lt;- ae[toupper(trimws(ae$RAWSEV)) == &quot;SEVERE&quot;, ]</pre><pre hidden>ae$AESEV &lt;- toupper(trimws(ae$RAWSEV))
+severe &lt;- ae[ae$AESEV == &quot;SEVERE&quot;, ]</pre><details class="ex"><summary>📖 Explain this code</summary><table><tr><td><code>trimws()</code></td><td>Remove extra spaces.</td></tr><tr><td><code>toupper()</code></td><td>Make capital letters.</td></tr><tr><td><code>== &quot;SEVERE&quot;</code></td><td>Keep severe events.</td></tr></table></details>
+<div class="note">💡 The second line reuses AESEV instead of cleaning the text again.</div></div></section>
+<section><div class="wrap"><h2>ADaM: convert a date once</h2><p class="sub">Save the converted date and reuse it.</p>
+<button class="tab sel" onclick="flip(this,0)">Before</button><button class="tab" onclick="flip(this,1)">Better</button>
+<pre>adae$ASTDY &lt;- as.Date(adae$AESTDTC) - adae$TRTSDT + 1
+adae$ASTMON &lt;- months(as.Date(adae$AESTDTC))</pre><pre hidden>adae$ASTDT &lt;- as.Date(adae$AESTDTC)
+adae$ASTDY &lt;- adae$ASTDT - adae$TRTSDT + 1
+adae$ASTMON &lt;- months(adae$ASTDT)</pre><details class="ex"><summary>📖 Explain this code</summary><table><tr><td><code>as.Date()</code></td><td>Turn date text into a real date.</td></tr><tr><td><code>TRTSDT</code></td><td>Treatment start date.</td></tr><tr><td><code>months()</code></td><td>Name of the month.</td></tr></table></details>
+<div class="note">💡 Same idea as memoization: work it out once. This day formula is for events on or after treatment start, with complete dates.</div></div></section>
+<section><div class="wrap"><h2>ADaM: filter before you merge</h2><p class="sub">Safety population only.</p>
+<button class="tab sel" onclick="flip(this,0)">Before</button><button class="tab" onclick="flip(this,1)">Better</button>
+<pre>m &lt;- merge(adae, adsl, by = &quot;USUBJID&quot;)
+m &lt;- m[m$SAFFL == &quot;Y&quot;, ]</pre><pre hidden>safe &lt;- adsl[adsl$SAFFL == &quot;Y&quot;, ]
+m &lt;- merge(adae, safe, by = &quot;USUBJID&quot;)</pre><details class="ex"><summary>📖 Explain this code</summary><table><tr><td><code>SAFFL == &quot;Y&quot;</code></td><td>Safety population flag.</td></tr><tr><td><code>merge(by = &quot;USUBJID&quot;)</code></td><td>Join by subject.</td></tr></table></details>
+<div class="note">💡 Remove unwanted subjects first, so the merge handles fewer rows.</div></div></section>
+<section><div class="wrap"><h2>TLF: filter once, reuse</h2><p class="sub">Two results from the same population.</p>
+<button class="tab sel" onclick="flip(this,0)">Before</button><button class="tab" onclick="flip(this,1)">Better</button>
+<pre>n &lt;- nrow(adsl[adsl$SAFFL == &quot;Y&quot;, ])
+age &lt;- mean(adsl$AGE[adsl$SAFFL == &quot;Y&quot;])</pre><pre hidden>safe &lt;- adsl[adsl$SAFFL == &quot;Y&quot;, ]
+n &lt;- nrow(safe)
+age &lt;- mean(safe$AGE)</pre><details class="ex"><summary>📖 Explain this code</summary><table><tr><td><code>safe</code></td><td>The saved safety population.</td></tr><tr><td><code>nrow()</code></td><td>Number of subjects.</td></tr><tr><td><code>mean()</code></td><td>Average age.</td></tr></table></details>
+<div class="note">💡 The filter is written once, so it runs once and there is only one place to fix.</div></div></section>
+<section><div class="wrap"><h2>TLF: count all arms together</h2><p class="sub">Subjects per treatment arm.</p>
+<button class="tab sel" onclick="flip(this,0)">Before</button><button class="tab" onclick="flip(this,1)">Better</button>
+<pre>drug &lt;- sum(adsl$TRT01A == &quot;Drug&quot;)
+placebo &lt;- sum(adsl$TRT01A == &quot;Placebo&quot;)</pre><pre hidden>table(adsl$TRT01A)</pre><details class="ex"><summary>📖 Explain this code</summary><table><tr><td><code>TRT01A</code></td><td>Actual treatment.</td></tr><tr><td><code>table()</code></td><td>Count each value.</td></tr></table></details>
+<div class="note">💡 One line covers every arm, including any you did not type. This is mainly about simpler code, not a big speed gain.</div></div></section>
+<section><div class="wrap"><h2>Game: spot the repeated work</h2><p class="sub">Click the line that does the same job again.</p>
+<button class="opt" onclick="this.classList.add('wrong')"><code>adsl$TRTSDT &lt;- as.Date(adsl$TRTSDTC)</code></button>
+<button class="opt" onclick="this.classList.add('wrong')"><code>adsl$TRTEDT &lt;- as.Date(adsl$TRTEDTC)</code></button>
+<button class="opt" onclick="this.classList.add('right');this.parentElement.querySelector('.note').hidden=false"><code>adsl$TRTDURD &lt;- adsl$TRTEDT - as.Date(adsl$TRTSDTC) + 1</code></button>
+<div class="note" hidden>💡 Correct! The start date was already converted. Use: <code>adsl$TRTEDT - adsl$TRTSDT + 1</code></div></div></section>
+<section><div class="wrap"><h2>Better algorithm: binary search</h2><p class="sub">Find a number in a <b>sorted</b> list. Pick a target, then compare the two methods.</p>
+<label>Target: <select id="tg" onchange="draw()"></select></label>
+<button class="fill" onclick="search(0)">Linear search</button><button class="fill" onclick="search(1)">Binary search</button>
+<div class="cells" id="sc"></div><div class="big" id="sr"></div>
+<pre># In R, on a sorted vector x
+which(x == target)        # checks every item: O(n)
+findInterval(target, x)       # binary search: O(log n)</pre>
+<p class="small">findInterval returns the position of the last value ≤ target, so confirm x[pos] == target.</p><div class="note">💡 For 1,000,000 sorted values, binary search needs at most 20 checks. Joins by USUBJID are a lookup problem too: use <code>match()</code> or a join, not a separate search for each record.</div></div></section>
+<section><div class="wrap"><h2>Remember answers: memoization</h2><p class="sub">Plain recursive Fibonacci solves the same problems again and again.</p>
+<pre>fib(n) = fib(n - 1) + fib(n - 2)
+# save each answer, then reuse it</pre><p>n = <b id="fv">10</b></p><input type="range" id="f" min="5" max="40" value="10" aria-label="Fibonacci n">
+<div class="grid"><div class="card">Function calls, plain<div class="big r" id="fp"></div></div><div class="card">Function calls, memoized (empty cache)<div class="big g" id="fm"></div></div></div><div class="note">💡 Same idea in study code: derive reference values such as treatment start date once, then reuse them.</div></div></section>
+<section><div class="wrap"><h2>Final quiz</h2><div id="quiz" class="card"></div></div></section>
+<section><div class="wrap"><h2>Your speed checklist</h2><p class="sub">Tick each habit as you recap it.</p><div class="card" id="chk"></div><div class="big g" id="cm"></div><p style="margin-top:14px">Thank you! Questions?</p></div></section>
+<nav><button onclick="go(i-1)">← Back</button><span id="num"></span><button class="fill" onclick="go(i+1)">Next →</button></nav>
+<script>
+const $=s=>document.querySelector(s),S=[...document.querySelectorAll('section')];let i=0;
+function go(k){i=Math.max(0,Math.min(S.length-1,k));S.forEach((s,j)=>s.classList.toggle('on',j==i));$('#num').textContent=(i+1)+' / '+S.length;$('#bar').style.width=(i+1)/S.length*100+'%'}
+addEventListener('keydown',e=>{if(e.target.matches('input,select,[contenteditable="true"]'))return;if(e.key=='ArrowRight'||e.key=='PageDown')go(i+1);if(e.key=='ArrowLeft'||e.key=='PageUp')go(i-1)});
+function flip(b,k){const s=b.closest('.wrap');s.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('sel',j==k));s.querySelectorAll('pre').forEach((p,j)=>p.hidden=j!=k)}
+function show(b){b.nextElementSibling.hidden=false;b.hidden=true}
+const bar=(l,v,w,c)=>`<div>${l}: <b>${v}</b></div><div class="track"><div class="fillbar" data-w="${w}" style="width:${w}%;${c?'background:'+c:''}"></div></div>`;
+function bigO(){const n=10**$('#n').value;$('#nv').textContent=n.toLocaleString();
+$('#o').innerHTML=[['O(1) lookup by position',1],['O(log n) binary search',Math.ceil(Math.log2(n))],['O(n) one pass through the data',n],['O(n log n) good sorting',Math.round(n*Math.log2(n))],['O(n²) compare every record with every record',n*n]].map(([l,v])=>bar(l,v.toLocaleString()+' steps',Math.max(1,Math.log10(v)/12*100))).join('')}
+$('#n').oninput=bigO;bigO();
+const T=[['system.time({\n  x <- sort(runif(1e6))\n})','Built in. Quick check of one run. Look at "elapsed".'],['install.packages("bench")\nbench::mark(\n  apply = apply(m, 1, sum),\n  fast  = rowSums(m)\n)','Compares options over many runs and shows memory use. Create m first: m <- matrix(runif(1e6), 1000)'],['install.packages("profvis")\nprofvis::profvis({\n  source("my_script.R")\n})','Shows which lines take the most time. Best run in RStudio.']];
+function tab(b,k){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('sel'));if(b)b.classList.add('sel');$('#tool').textContent=T[k][0];$('#toolt').textContent=T[k][1]}tab(null,0);
+const A=[3,7,11,15,19,24,28,33,37,42,46,51,55,60,64,69,73,78,82,87,91,96];
+A.forEach((v,k)=>$('#tg').add(new Option(v,k,false,k==17)));let tm=[];
+function draw(){tm.forEach(clearTimeout);tm=[];$('#sc').innerHTML=A.map(v=>`<span>${v}</span>`).join('');$('#sr').textContent=''}
+function search(bin){draw();const t=+$('#tg').value,c=[...$('#sc').children];let steps=[],l=0,h=A.length-1;
+if(bin){while(l<=h){const m=(l+h)>>1;steps.push([m,l,h]);if(m==t)break;m<t?l=m+1:h=m-1}}else for(let k=0;k<=t;k++)steps.push([k]);
+steps.forEach(([m,lo,hi],n)=>tm.push(setTimeout(()=>{if(bin)c.forEach((e,k)=>e.classList.toggle('out',k<lo||k>hi));c[m].className=m==t?'hit':'seen';$('#sr').textContent=(bin?'Binary':'Linear')+' search: '+(n+1)+' checks'},n*(bin?700:200))))}draw();
+function calls(n){let a=1,b=1;for(let k=3;k<=n;k++)[a,b]=[b,1+a+b];return b}
+function fib(){const n=+$('#f').value;$('#fv').textContent=n;$('#fp').textContent=calls(n).toLocaleString();$('#fm').textContent=2*n-3}$('#f').oninput=fib;fib();
+const Q=[["What should you do before optimizing?", ["Rewrite everything", "Measure where time goes", "Buy a faster computer"], 1, "Measure first."], ["Why save a converted date and reuse it?", ["It changes the dates", "The conversion is not repeated", "It sorts the data"], 1, "Repeated work is avoided."], ["Before merging ADSL onto AE, it helps to\u2026", ["Keep only needed rows and columns", "Add more columns", "Merge twice"], 0, "Less data to carry."], ["Binary search needs the data to be\u2026", ["Sorted", "All positive", "Character"], 0, "It discards half each step."], ["Doubling n makes an O(n\u00b2) method take about\u2026", ["2\u00d7 as long", "4\u00d7 as long", "The same"], 1, "(2n)\u00b2 = 4n\u00b2."], ["Shorter code is\u2026", ["Always faster", "Not necessarily faster", "Always slower"], 1, "Measure it."], ["A subject with three headaches counts in a subject count as\u2026", ["3", "1", "0"], 1, "Count unique subjects."]];
+let q=0,sc=0;function quiz(){const z=$('#quiz');if(q==Q.length){z.innerHTML=`<div class="big">Score: ${sc} / ${Q.length}</div><p>${sc>=6?'Excellent! 🎉':sc>=4?'Good work. Review the ones you missed.':'Worth another round.'}</p><button class="fill" onclick="q=sc=0;quiz()">Retry</button>`;return}
+const[t,o,a,why]=Q[q];z.innerHTML=`<p class="small">Question ${q+1} of ${Q.length}</p><p><b></b></p><div></div><p></p>`;z.querySelector('b').textContent=t;const box=z.children[2],fb=z.children[3];
+o.forEach((x,k)=>{const b=document.createElement('button');b.className='opt';b.textContent=x;b.onclick=()=>{[...box.children].forEach(e=>e.disabled=true);box.children[a].classList.add('right');if(k==a)sc++;else b.classList.add('wrong');fb.textContent=(k==a?'Correct. ':'Not quite. ')+why+' ';const n=document.createElement('button');n.className='fill';n.textContent=q<Q.length-1?'Next question':'See score';n.onclick=()=>{q++;quiz()};fb.append(n)};box.append(b)})}quiz();
+const C=["Measure before changing code", "Pick a better method first", "Do repeated work once", "Filter rows and columns before merging", "Keep only the columns you need", "Check the output still matches"];
+C.forEach(c=>$('#chk').insertAdjacentHTML('beforeend',`<label style="display:block"><input type="checkbox"> ${c}</label>`));
+$('#chk').onchange=()=>{const n=document.querySelectorAll('#chk :checked').length;$('#cm').textContent=n==C.length?'All done. You are ready to write faster R! 🚀':''};
+go(0);
+</script>
+<script>
+const X={"race": [["r <- c()", "Start with an empty result."], ["for (i in 1:n)", "Repeat for each number from 1 to n."], ["r <- c(r, i^2)", "Make a new vector: all old values plus the new square. Slow."], ["r <- numeric(n)", "Create n empty slots (zeros) first."], ["r[i] <- i^2", "Put the square into slot i."], ["r <- (1:n)^2", "Square all numbers from 1 to n in one go."]], "sdtmS": [["sexd <- character(nrow(dm))", "Make one empty text slot per subject."], ["for (i in seq_len(nrow(dm)))", "Go through the rows one at a time."], ["if (...) \"Male\" else \"Female\"", "If SEX is M write Male, otherwise write Female."]], "sdtmF": [["decode <- c(M = \"Male\", F = \"Female\")", "A small dictionary: code on the left, meaning on the right."], ["decode[dm$SEX]", "Look up every subject's code at once."], ["unname(...)", "Remove the M / F labels, keeping only the words."]], "adamS": [["vs$ADY <- NA", "Add an empty study day column."], ["for (i in seq_len(nrow(vs)))", "Go through each vital signs row."], ["ref <- dm$RFSTDTC[...]", "Search all of DM for this subject's reference start date."], ["d <- as.numeric(as.Date(..) - as.Date(ref))", "Days between the visit date and the start date."], ["d + (d >= 0)", "Add 1 on or after the start date, so there is no day 0."]], "adamF": [["match(vs$USUBJID, dm$USUBJID)", "For every VS row, find which DM row has the same subject."], ["dm$RFSTDTC[...]", "Pick up the start dates from those rows."], ["d <- ...", "Subtract the dates for all rows together."], ["vs$ADY <- d + (d >= 0)", "TRUE counts as 1, so days on or after the start get +1."]], "tlfS": [["out <- c()", "Start with an empty output."], ["for (g ...) for (s ...)", "Try every combination of treatment arm and sex."], ["dm[dm$ARM == g & dm$SEX == s, ]", "Keep only the rows in that combination."], ["nrow(...)", "Count those rows."], ["rbind(out, data.frame(...))", "Glue one more result row to the output."]], "tlfF": [["table(dm$SEX, dm$ARM)", "Count every sex by arm combination in one step."], ["prop.table(n, margin = 2)", "Turn counts into proportions within each arm (column)."], ["round(100 * ..., 1)", "Show as a percentage with 1 decimal."]], "search": [["which(x == target)", "Compare every value with the target and return matching positions."], ["findInterval(target, x)", "Repeatedly halve the sorted vector to find the position."]], "memo": [["fib(n - 1) + fib(n - 2)", "Each number is the sum of the two before it."], ["save and reuse", "Never work out the same number twice."]], "fix": [["mean(df$price)", "Work out the average price once."], ["df$price - ...", "Subtract it from every price at once."], ["total <-", "Store the results."]], "tool0": [["runif(1e6)", "Make one million random numbers."], ["sort(...)", "Put them in order."], ["x <-", "Save the result."], ["system.time({ })", "Time whatever is inside the braces."]], "tool1": [["install.packages(\"bench\")", "Download the package (needed once)."], ["bench::mark(...)", "Run each option many times and compare."], ["apply(m, 1, sum)", "Add up each row of matrix m."], ["rowSums(m)", "The faster built-in for the same job."]], "tool2": [["install.packages(\"profvis\")", "Download the package (needed once)."], ["profvis::profvis({ })", "Record where time is spent."], ["source(\"my_script.R\")", "Run your script file (use your own file name)."]], "s2f": [["s + x[i]  \u2192  sum(x)", "Add all values of x. Start with s <- 0 for the loop."], ["apply(m, 1, sum)  \u2192  rowSums(m)", "Total of each row."], ["if / else loop  \u2192  ifelse()", "Label each value pos or neg (zero counts as neg)."], ["paste0 loop  \u2192  paste(collapse = \"\")", "Join all pieces of text into one."]], "spot": [["numeric(nrow(df))", "One empty slot per row."], ["for (i in seq_len(nrow(df)))", "Visit each row."], ["mean(df$price)", "Average of the whole price column."], ["df$price[i] - avg", "This row's price minus the average."]], "grow": [["c(r, x)", "Combine the old vector r with a new value x, creating a new vector."], ["rbind()", "Stack rows on top of each other, creating a new table."]]};
+const S2=[...document.querySelectorAll('section')];
+const find=t=>S2.find(s=>s.querySelector('h2')?.textContent.startsWith(t));
+const box=(k,label)=>`<details class="ex"><summary>📖 ${label||'Explain this code'}</summary><table></table></details>`;
+function fill(d,k){const t=d.querySelector('table');t.innerHTML='';X[k].forEach(([a,b])=>{const r=t.insertRow();const c=document.createElement('code');c.textContent=a;r.insertCell().append(c);r.insertCell().textContent=b})}
+function put(el,k,label){el.insertAdjacentHTML('afterend',box(k,label));fill(el.nextElementSibling,k);return el.nextElementSibling}
+window.flip=(b,j)=>{const s=b.closest('.wrap');s.querySelectorAll('.tab').forEach((t,n)=>t.classList.toggle('sel',n==j));s.querySelectorAll('pre').forEach((p,n)=>p.hidden=n!=j)};
+put(find('Better algorithm').querySelector('pre'),'search');
+put(find('Remember answers').querySelector('pre'),'memo');
+const td=put(document.querySelector('#toolt'),'tool0');
+document.querySelectorAll('#tool ~ *, .tab').forEach(()=>{});
+find('Step 1').querySelectorAll('.tab').forEach((b,j)=>b.addEventListener('click',()=>fill(td,'tool'+j)));
+</script><div id="hud"><span id="xp">⭐ 0 XP</span><button id="snd" title="Sound on or off">🔇</button></div><div id="bot"><i>🤖</i><div id="say"></div></div>
+<script>
+(()=>{
+const secs=()=>[...document.querySelectorAll('section')];
+const sec=t=>secs().find(s=>s.querySelector('h2')?.textContent.startsWith(t));
+const mk=h=>{const s=document.createElement('section');s.innerHTML='<div class="wrap">'+h+'</div>';return s};
+const order=mk('<h2>Game: build the pipeline 🧩</h2><p class="sub">Click the blocks in the correct order, from collection to report.</p><div id="blocks"></div><div class="card"><b>Your pipeline:</b> <span id="line"></span></div><p class="big" id="om"></p><button id="oreset">Play again</button>');
+sec('Where speed').after(order);
+const bolt=mk('<h2>Lightning round ⚡</h2><p class="sub">True or false. You have 30 seconds!</p><div class="card"><div class="big" id="tm">30</div><p class="big" id="st">Ready?</p><button class="fill" id="go30">Start</button><span id="tf" hidden><button id="yes">👍 True</button><button id="no">👎 False</button></span><p id="fb"></p></div>');
+sec('Final quiz').before(bolt);
+// the slide list was captured before these were added, so refresh it
+S.splice(0,S.length,...secs());
+
+let xp=0,on=false,ac;const done=new Set();
+function beep(f){if(!on)return;ac=ac||new AudioContext();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.07;o.connect(g).connect(ac.destination);o.start();o.stop(ac.currentTime+.14)}
+function award(key,n){if(done.has(key))return;done.add(key);xp+=n;document.getElementById('xp').textContent='⭐ '+xp+' XP';beep(660)}
+function party(n=90){if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;for(let k=0;k<n;k++){const c=document.createElement('div');c.className='confetti';c.style.left=Math.random()*100+'vw';c.style.background=['#2563c9','#12b886','#f59f00','#e64980','#7950f2'][k%5];document.body.append(c);c.animate([{transform:'translateY(0)'},{transform:`translate(${Math.random()*200-100}px,105vh) rotate(${Math.random()*900}deg)`}],{duration:1500+Math.random()*1500,easing:'ease-in'}).onfinish=()=>c.remove()}beep(880)}
+const say=t=>document.getElementById('say').textContent=t;
+document.getElementById('snd').onclick=e=>{on=!on;e.target.textContent=on?'🔊':'🔇';beep(660)};
+
+// mascot comment for each slide
+const lines={'Two ideas':'Click the cards! 👆','Where speed':'Follow the data 🚚','Game: build':'Your turn! 🧩','Big-O':'Drag me to a million! 📈','Step 1':'Stopwatch time ⏱️','SDTM':'Guess before you click 🤔','ADaM':'Work smart, not twice 🧠','TLF':'Table time 📊','Game: spot':'Detective mode 🕵️','Better':'Halve it! ✂️','Remember':'I never forget 🐘','Lightning':'Quick quick! ⚡','Final':'Show what you know 🎯','Your speed':'Finish line 🏁'};
+function mood(){const h=document.querySelector('section.on h2')?.textContent||'';const k=Object.keys(lines).find(k=>h.startsWith(k));say(k?lines[k]:'Hi! Let\'s make R fly 🚀')}
+new MutationObserver(mood).observe(document.querySelector('#num'),{childList:true});
+
+// order game
+function build(){const b=document.getElementById('blocks'),line=document.getElementById('line'),om=document.getElementById('om');b.innerHTML='';line.textContent='';om.textContent='';const right=['Raw data','SDTM','ADaM','TLF'];let k=0;
+['ADaM','Raw data','TLF','SDTM'].forEach(x=>{const e=document.createElement('button');e.textContent=x;e.onclick=()=>{if(x==right[k]){k++;e.disabled=true;e.classList.add('right');line.textContent=right.slice(0,k).join(' ➜ ');say('Nice! ✅');if(k==4){om.textContent='🎉 Pipeline complete!';award('order',20);party()}}else{e.classList.add('wrong');say('Not yet 😅');beep(180);setTimeout(()=>e.classList.remove('wrong'),400)}};b.append(e)})}
+document.getElementById('oreset').onclick=build;build();
+
+// lightning round
+const T=[['SDTM comes before ADaM in the usual flow.',true],['ADSL has many rows per subject.',false],['Filtering before a merge means fewer rows to join.',true],['Shorter code is always faster.',false],['Binary search needs sorted data.',true],['A subject with two headaches counts as two subjects.',false],['system.time() can time your code.',true],['Converting the same date again and again is good practice.',false]];
+[1,2].forEach(()=>T.push(T.shift()));[T[2],T[5]]=[T[5],T[2]];
+let q,sc,left,timer;const $id=i=>document.getElementById(i);
+function show(){$id('st').textContent=T[q][0]}
+function end(){clearInterval(timer);$id('tf').hidden=true;$id('go30').hidden=false;$id('go30').textContent='Play again';$id('st').textContent=`You got ${sc} / ${T.length} ${sc>=6?'🏆':'💪'}`;if(sc>=6)party()}
+$id('go30').onclick=()=>{q=sc=0;left=30;$id('tm').textContent=left;$id('fb').textContent='';$id('go30').hidden=true;$id('tf').hidden=false;show();clearInterval(timer);timer=setInterval(()=>{$id('tm').textContent=--left;if(left<=0)end()},1000)};
+function ans(v){const ok=v==T[q][1];if(ok){sc++;award('tf'+q,5)}else beep(180);$id('fb').textContent=ok?'✅ Correct!':'❌ Oops!';q++;q<T.length?show():end()}
+$id('yes').onclick=()=>ans(true);$id('no').onclick=()=>ans(false);
+
+// rewards across existing slides
+document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const s=b.closest('section'),n=secs().indexOf(s);
+if(b.textContent=='Better'){award('better'+n,10);say('Much better! ✨');party(30)}
+if(b.classList.contains('right')&&!b.closest('#blocks')){award('r'+n+b.textContent+(s.querySelector('#quiz .small')?.textContent||''),10);if(!b.classList.contains('wrong'))party(50)}
+if(b.classList.contains('wrong')&&!b.closest('#blocks')){say('Good try! 🙂');beep(180)}
+if(/Reveal|Typical work|Binary search/.test(b.textContent))award('x'+n+b.textContent+[...s.querySelectorAll('button')].indexOf(b),5)});
+document.addEventListener('change',e=>{const all=[...e.target.closest('section')?.querySelectorAll('input[type=checkbox]')||[]];if(all.length&&all.every(c=>c.checked)){award('check',25);party(160);say('Champion! 🏆')}});
+go(0);mood();
+})();
+</script></body></html>
